@@ -1,0 +1,15 @@
+{
+  "name": "invoke-workflow-action",
+  "version": "1.0.0",
+  "description": "Invoke a cross repository workflow and poll for its result",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@actions/core": "^1.11.1",
+    "@actions/github": "^6.0.0"
+  }
+}

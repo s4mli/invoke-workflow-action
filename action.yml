@@ -1,0 +1,22 @@
+name: "Invoke Workflow"
+description: "Invoke a cross repo workflow and then poll its result"
+inputs:
+  pat:
+    description: "The Github access token with access to the repository."
+    required: true
+  owner:
+    description: "The owner of the repository where the workflow is contained."
+    required: true
+  repo:
+    description: "The repository where the workflow is contained."
+    required: true
+  type:
+    description: "The event type of the workflow."
+    required: true
+  payload:
+    description: "The payload sent to the workflow."
+    required: false
+    default: "{}"
+runs:
+  using: "node20"
+  main: "dist/index.js"
