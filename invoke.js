@@ -24,7 +24,7 @@ const workflow_runner = (pat) => {
       event_type,
       client_payload,
     });
-    return { http_status: status, created: new Date().toISOString() };
+    return { code: status, created: new Date().toISOString() };
   };
   const get_workflow_runs = async (owner, repo, created) => {
     const {
@@ -54,37 +54,33 @@ const workflow_runner = (pat) => {
 
 const invoke = async (pat, owner, repo, event_type, client_payload) => {
   const runner = workflow_runner(pat);
-  const { http_status, created } = await runner.repository_dispatch(
+  const { code, created } = await runner.repository_dispatch(
     owner,
     repo,
     event_type,
     client_payload
   );
-  if (204 !== http_status) {
-    throw new Error(`Invoke workflow failed ${http_status}`);
-  }
-  console.log("Workflow invoked with payload:", client_payload);
+  if (204 !== code) throw new Error(`Invoke workflow failed ${code}`);
+  console.log("Workflow invoked with payload", client_payload);
   await sleep(INTERVAL);
   const runs = await runner.get_workflow_runs(owner, repo, created);
-  if (runs.length <= 0) {
-    throw new Error(`No workflow runs found for ${event_type}`);
-  }
-  let { id, status, created_at, conclusion } = runs.find(
+  if (runs.length <= 0) throw new Error(`No workflow runs for ${event_type}`);
+  let { id, status, created_at, conclusion, html_url } = runs.find(
     (r) => COMPLETED !== r.status
   );
-  console.log(`Workflow run:`, { id, created_at, status });
+  console.log(`Workflow run ${id}`, { status, created_at });
   for (;;) {
-    ({ id, status, conclusion } = await runner.get_workflow_run_status(
-      owner,
-      repo,
-      id
-    ));
-    console.log(`Polling workflow run:`, { id, status, conclusion });
+    ({ id, status, conclusion, html_url } =
+      await runner.get_workflow_run_status(owner, repo, id));
+    console.log(`Poll workflow run ${id}`, { status, conclusion });
     if (COMPLETED === status) break;
     await sleep(INTERVAL);
   }
+  const message = `Workflow run ${id} ${status} with ${conclusion}, see ${html_url} for more details`;
   if (SUCCEEDED !== conclusion) {
-    throw new Error(`Workflow run ${id} failed`);
+    throw new Error(message);
+  } else {
+    console.log(message);
   }
 };
 
