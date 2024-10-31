@@ -82,12 +82,11 @@ const invoke = async (pat, owner, repo, event_type, client_payload) => {
     if (COMPLETED === status) break;
     await sleep(INTERVAL);
   }
-  const message = `Workflow run ${id} ${status} with ${conclusion}, see ${html_url} for more details`;
-  if (SUCCEEDED !== conclusion) {
-    throw new Error(message);
-  } else {
-    console.log(message);
-  }
+  const message = `Workflow run ${id} ${
+    SUCCEEDED !== conclusion ? "failed" : "succeeded"
+  }, see ${html_url}`;
+  console.log(message);
+  if (SUCCEEDED !== conclusion) throw new Error(message);
 };
 
 module.exports = { invoke };
