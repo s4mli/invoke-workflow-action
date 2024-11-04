@@ -1,8 +1,10 @@
+const core = require("@actions/core");
 const github = require("@actions/github");
 
 const COMPLETED = "completed";
 const SUCCEEDED = "success";
 const INTERVAL = 5000;
+const MAXRETRY = 3;
 
 const sleep = (ms) => {
   return new Promise((r) => {
@@ -10,14 +12,9 @@ const sleep = (ms) => {
   });
 };
 
-const workflow_runner = (pat) => {
+const workflowRunner = (pat) => {
   const octokit = github.getOctokit(pat);
-  const repository_dispatch = async (
-    owner,
-    repo,
-    event_type,
-    client_payload
-  ) => {
+  const repoDispatch = async ({ owner, repo, event_type, client_payload }) => {
     const { status } = await octokit.rest.repos.createDispatchEvent({
       owner,
       repo,
@@ -26,7 +23,7 @@ const workflow_runner = (pat) => {
     });
     return { code: status, created: new Date().toISOString() };
   };
-  const get_workflow_runs = async (owner, repo, created) => {
+  const listRepoWorkflowRuns = async ({ owner, repo, created }) => {
     const {
       data: { workflow_runs },
     } = await octokit.rest.actions.listWorkflowRunsForRepo({
@@ -37,7 +34,7 @@ const workflow_runner = (pat) => {
     });
     return workflow_runs;
   };
-  const get_workflow_run_status = async (owner, repo, run_id) => {
+  const getWorkflowRunStatus = async ({ owner, repo, run_id }) => {
     const { data } = await octokit.rest.actions.getWorkflowRun({
       owner,
       repo,
@@ -46,41 +43,47 @@ const workflow_runner = (pat) => {
     return data;
   };
   return {
-    repository_dispatch,
-    get_workflow_runs,
-    get_workflow_run_status,
+    repoDispatch,
+    listRepoWorkflowRuns,
+    getWorkflowRunStatus,
   };
 };
 
-const invoke = async (pat, owner, repo, event_type, client_payload) => {
-  const runner = workflow_runner(pat);
-  const { code, created } = await runner.repository_dispatch(
+module.exports = async ({ owner, repo, event_type, client_payload }) => {
+  const runner = workflowRunner(process.env.GITHUB_TOKEN);
+  const { code, created } = await runner.repoDispatch({
     owner,
     repo,
     event_type,
-    client_payload
-  );
+    client_payload,
+  });
   if (204 !== code) throw new Error(`Invoke workflow failed ${code}`);
-  console.log("Workflow invoked with payload", client_payload);
-  await sleep(INTERVAL);
-  const runs = await runner.get_workflow_runs(owner, repo, created);
-  if (runs.length <= 0) throw new Error(`No workflow runs for ${event_type}`);
-  let { id, status, created_at, conclusion, html_url } = runs.find(
+  core.info(`Workflow invoked with ${JSON.stringify(client_payload, null, 2)}`);
+  let runs = [];
+  for (let k = 0; k < MAXRETRY; k++) {
+    await sleep(INTERVAL * (k + 1));
+    runs = await runner.listRepoWorkflowRuns({ owner, repo, created });
+    if (runs.length <= 0) core.warning(`Retry-${k} listing workflowRuns`);
+    else break;
+  }
+  if (runs.length <= 0) throw new Error(`List workflowRuns failed`);
+  let { id, status, created_at, conclusion, html_url } = runs.findLast(
     (r) => COMPLETED !== r.status
   );
-  console.log(`Workflow run ${id}`, { status, created_at });
+  core.info(`${id} ${JSON.stringify({ status, created_at }, null, 2)}`);
   for (;;) {
-    ({ id, status, conclusion, html_url } =
-      await runner.get_workflow_run_status(owner, repo, id));
-    console.log(`Poll workflow run ${id}`, { status, conclusion });
+    ({ id, status, conclusion, html_url } = await runner.getWorkflowRunStatus({
+      owner,
+      repo,
+      run_id: id,
+    }));
+    core.info(`Poll ${id} ${JSON.stringify({ status, conclusion }, null, 2)}`);
     if (COMPLETED === status) break;
     await sleep(INTERVAL);
   }
-  const message = `Workflow run ${id} ${
+  const message = `WorkflowRun ${id} ${
     SUCCEEDED !== conclusion ? "failed" : "succeeded"
   }, see ${html_url}`;
-  console.log(message);
+  core.info(message);
   if (SUCCEEDED !== conclusion) throw new Error(message);
 };
-
-module.exports = { invoke };

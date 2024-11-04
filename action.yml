@@ -1,9 +1,6 @@
 name: "Invoke Workflow"
 description: "Invoke a cross repo workflow and then poll its result"
 inputs:
-  pat:
-    description: "The Github access token with access to the repository."
-    required: true
   owner:
     description: "The owner of the repository where the workflow is contained."
     required: true
