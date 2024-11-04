@@ -35,3 +35,6 @@ with:
   type: test
   payload: '{"id": 1}'
 ```
+
+## Limitation
+Due to the design/limitation of Github API, do not trigger repository_dispatch event faster than once a second.
